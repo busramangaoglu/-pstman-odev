@@ -19,45 +19,44 @@ var converter = (function () {
 })();
 
 const listVenues = function (req, res) {
-    var lat = parseFloat(req.query.lat) || 0;
-    var long = parseFloat(req.query.long) || 0;
-    var point = { type: "Point", coordinates: [lat, long] };
-    var geoOptions = {
-        distanceField: "distance", spherical: true,
-        maxDistance: converter.radian2Kilometer(100)
-    };
-    try {
-        Venue.aggregate([
-            {
-                $geoNear: {
-                    near: point, ...geoOptions,
-                }
-            }]).then((result) => {
-                const venues = result.map(function (venue) {
-                    return {
-                        distance: converter.kilometer2Radian(venue.distance),
-                        name: venue.name,
-                        address: venue.address,
-                        rating: venue.rating,
-                        foodanddrink: venue.foodanddrink,
-                        id: venue._id,
-                    };
-                });
-                if (venues.length > 0)
-                    createResponse(res, "200", venues);
-                else
-                    createResponse(res, "200", { "status": "Civarda mekan yok" });
-            })
-    } catch (error) {
-        createResponse(res, "404", error);
-    }
+  const lat = parseFloat(req.query.lat);
+  const long = parseFloat(req.query.long);
+
+  if (isNaN(lat) || isNaN(long)) {
+    return createResponse(res, 400, { message: "lat ve long zorunlu" });
+  }
+
+  const point = { type: "Point", coordinates: [long, lat] }; // ✅ [LONG, LAT]
+
+  const geoOptions = {
+    distanceField: "distance",
+    spherical: true,
+    maxDistance: 10000 // ✅ metre (10 km)
+  };
+
+  Venue.aggregate([{ $geoNear: { near: point, ...geoOptions } }])
+    .then((result) => {
+      const venues = result.map(v => ({
+        distance: v.distance, // metre
+        name: v.name,
+        address: v.address,
+        rating: v.rating,
+        foodanddrink: v.foodanddrink,
+        id: v._id,
+      }));
+      return createResponse(res, 200, venues.length ? venues : { status: "Civarda mekan yok" });
+    })
+    .catch((err) => {
+      return createResponse(res, 500, { message: "Sunucu hatası", error: err.message || err });
+    });
 };
+
 
 const addVenue = async function (req, res) {
     try {
         await Venue.create({
             ...req.body,
-            coordinates: [parseFloat(req.body.lat), parseFloat(req.body.long)],
+            coordinates: [parseFloat(req.body.long), parseFloat(req.body.lat)],
 hours: [
                 {
                     day: req.body.day1
